@@ -30,9 +30,9 @@ private:
   };
   
   struct SimpleS : public BaseS {
-    StringT s_;
-    SizeT first_;
-    SizeT last_;
+    const StringT s_;
+    const SizeT first_;
+    const SizeT last_;
     SimpleS(const StringT& s, SizeT first, SizeT last)
       : BaseS(last - first), s_(s), first_(first), last_(last) {}
     virtual CharT at(SizeT pos) const {
