@@ -13,7 +13,7 @@ private:
   class SimpleS;
   
   struct BaseS {
-    SizeT size_;
+    const SizeT size_;
     mutable size_t refcnt_;
     BaseS(SizeT size) : size_(size), refcnt_(0) {}
     virtual ~BaseS() {}
