@@ -21,6 +21,7 @@ private:
     void release() const {
       if (refcnt_-- == 0) delete const_cast<BaseS*>(this);
     }
+    virtual CharT at(SizeT pos) const = 0;
     virtual const BaseS* substr(SizeT pos, SizeT length) const = 0;
     virtual const BaseS* append(const BaseS* s) const = 0;
     virtual const BaseS* append(const StringT& s) const = 0;
@@ -34,6 +35,9 @@ private:
     SizeT last_;
     SimpleS(const StringT& s, SizeT first, SizeT last)
       : BaseS(last - first), s_(s), first_(first), last_(last) {}
+    virtual CharT at(SizeT pos) const {
+      return s_[first_ + pos];
+    }
     virtual const BaseS* substr(SizeT pos, SizeT length) const {
       return new SimpleS(s_, first_ + pos, first_ + pos + length);
     }
@@ -64,6 +68,10 @@ private:
     ~LinkS() {
       left_->release();
       right_->release();
+    }
+    virtual CharT at(SizeT pos) const {
+      return pos < left_->size_
+	? left_->at(pos) : right_->at(pos - left_->size_);
     }
     virtual const BaseS* substr(SizeT pos, SizeT length) const {
       if (pos < left_->size_) {
@@ -116,6 +124,11 @@ public:
   }
   bool empty() const { return s_ == NULL; }
   SizeT size() const { return s_ != NULL ? s_->size_ : 0; }
+  CharT at(SizeT pos) const {
+    assert(s_ != NULL);
+    assert(pos < s_->size_);
+    return s_->at(pos);
+  }
   picostring substr(SizeT pos, SizeT length) const {
     assert(pos < s_->size_);
     assert(pos + length <= s_->size_);
