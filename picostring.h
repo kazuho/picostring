@@ -13,14 +13,14 @@ private:
   class SimpleS;
   
   struct BaseS {
-    const size_type size_;
     mutable size_t refcnt_;
-    BaseS(size_type size) : size_(size), refcnt_(0) {}
+    BaseS() : refcnt_(0) {}
     virtual ~BaseS() {}
     const BaseS* retain() const { refcnt_++; return this; }
     void release() const {
       if (refcnt_-- == 0) delete const_cast<BaseS*>(this);
     }
+    virtual size_type size() const = 0;
     virtual char_type at(size_type pos) const = 0;
     virtual const BaseS* substr(size_type pos, size_type length) const = 0;
     virtual const BaseS* append(const BaseS* s) const = 0;
@@ -34,7 +34,10 @@ private:
     const size_type first_;
     const size_type last_;
     SimpleS(const StringT& s, size_type first, size_type last)
-      : BaseS(last - first), s_(s), first_(first), last_(last) {}
+      : s_(s), first_(first), last_(last) {}
+    virtual size_type size() const {
+      return s_.size();
+    }
     virtual char_type at(size_type pos) const {
       return s_[first_ + pos];
     }
@@ -62,27 +65,31 @@ private:
   struct LinkS : public BaseS {
     const BaseS* left_;
     const BaseS* right_;
+    size_type size_;
   public:
     LinkS(const BaseS* left, const BaseS* right)
-      : BaseS(left->size_ + right->size_), left_(left), right_(right) {}
+      : left_(left), right_(right), size_(left->size() + right->size()) {}
     ~LinkS() {
       left_->release();
       right_->release();
     }
+    virtual size_type size() const {
+      return size_;
+    }
     virtual char_type at(size_type pos) const {
-      return pos < left_->size_
-	? left_->at(pos) : right_->at(pos - left_->size_);
+      return pos < left_->size()
+	? left_->at(pos) : right_->at(pos - left_->size());
     }
     virtual const BaseS* substr(size_type pos, size_type length) const {
-      if (pos < left_->size_) {
-	if (pos + length <= left_->size_) {
+      if (pos < left_->size()) {
+	if (pos + length <= left_->size()) {
 	  return left_->substr(pos, length);
 	} else {
-	  return new LinkS(left_->substr(pos, left_->size_ - pos),
-			   right_->substr(0, pos + length - left_->size_));
+	  return new LinkS(left_->substr(pos, left_->size() - pos),
+			   right_->substr(0, pos + length - left_->size()));
 	}
       } else {
-	return right_->substr(pos - left_->size_, length);
+	return right_->substr(pos - left_->size(), length);
       }
     }
     virtual const BaseS* append(const BaseS* s) const {
@@ -92,9 +99,9 @@ private:
       return new LinkS(this->retain(), new SimpleS(s, 0, s.size()));
     }
     virtual const SimpleS* flatten() const {
-      StringT s(this->size_, char_type());
+      StringT s(this->size(), char_type());
       flatten(&s[0]);
-      return new SimpleS(s, 0, this->size_);
+      return new SimpleS(s, 0, this->size());
     }
     virtual char_type* flatten(char_type* out) const {
       out = left_->flatten(out);
@@ -123,14 +130,14 @@ public:
     if (s_ != NULL) s_->release();
   }
   bool empty() const { return s_ == NULL; }
-  size_type size() const { return s_ != NULL ? s_->size_ : 0; }
+  size_type size() const { return s_ != NULL ? s_->size() : 0; }
   char_type at(size_type pos) const {
     assert(s_ != NULL);
-    assert(pos < s_->size_);
+    assert(pos < s_->size());
     return s_->at(pos);
   }
   picostring substr(size_type pos, size_type length) const {
-    assert(pos + length <= s_->size_);
+    assert(pos + length <= s_->size());
     if (length == 0)
       return picostring();
     assert(s_ != NULL);
