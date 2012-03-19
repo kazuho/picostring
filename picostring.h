@@ -1,8 +1,8 @@
 #ifndef picostring_h
 #define picostring_h
 
+#include <algorithm>
 #include <cassert>
-#include <string>
 
 template <typename StringT> class picostring {
 public:
@@ -92,7 +92,7 @@ private:
       return new LinkS(this->retain(), new SimpleS(s, 0, s.size()));
     }
     virtual const SimpleS* flatten() const {
-      std::string s(this->size_, CharT());
+      StringT s(this->size_, CharT());
       flatten(&s[0]);
       return new SimpleS(s, 0, this->size_);
     }
@@ -109,7 +109,7 @@ private:
 public:
   picostring() : s_(NULL) {}
   picostring(const picostring& s) : s_(s.s_->retain()) {}
-  picostring(const std::string& s) : s_(NULL) {
+  picostring(const StringT& s) : s_(NULL) {
     if (! s.empty()) s_ = new SimpleS(s, 0, s.size());
   }
   picostring& operator=(const picostring& s) {
@@ -130,7 +130,6 @@ public:
     return s_->at(pos);
   }
   picostring substr(SizeT pos, SizeT length) const {
-    assert(pos < s_->size_);
     assert(pos + length <= s_->size_);
     if (length == 0)
       return picostring();
@@ -150,8 +149,8 @@ public:
     else
       return picostring(s_->append(s));
   }
-  const std::string& str() const {
-    static std::string emptyStr;
+  const StringT& str() const {
+    static StringT emptyStr;
     if (s_ == NULL)
       return emptyStr;
     const SimpleS* flat = s_->flatten();
@@ -165,12 +164,92 @@ public:
 
 #ifdef TEST_PICOSTRING
 
-extern "C" int main(int, char**)
+#include <cstdio>
+#include <string>
+
+using namespace std;
+
+static void plan(int num)
 {
-  picostring<std::string> s("abc");
-  s = s.append("de");
-  s = s.substr(2, 2);
-  printf("%s\n", s.str().c_str());
+  printf("1..%d\n", num);
+}
+
+static bool success = true;
+
+static void ok(bool b, const char* name = "")
+{
+  static int n = 1;
+  if (! b)
+    success = false;
+  printf("%s %d - %s\n", b ? "ok" : "ng", n++, name);
+}
+
+template <typename T> void is(const T& x, const T& y, const char* name = "")
+{
+  if (x == y) {
+    ok(true, name);
+  } else {
+    ok(false, name);
+  }
+}
+
+typedef picostring<string> picostr;
+
+int main(int, char**)
+{
+  plan(45);
+  
+  is(picostr().str(), string());
+  ok(picostr().empty());
+  is(picostr().size(), (picostr::SizeT)0);
+
+  is(picostr("").str(), string());
+  ok(picostr("").empty());
+  is(picostr("").size(), (picostr::SizeT)0);
+  
+  is(picostr("").append("abc").str(), string("abc"));
+  is(picostr("abc").append("de").str(), string("abcde"));
+  is(picostr("abc").append("de").append("f").str(), string("abcdef"));
+
+  picostr s = picostr("abc").append("de").append("f");
+  ok(! s.empty());
+  is(s.size(), (picostr::SizeT)6);
+  is(s.at(0), 'a');
+  is(s.at(1), 'b');
+  is(s.at(2), 'c');
+  is(s.at(3), 'd');
+  is(s.at(4), 'e');
+  is(s.at(5), 'f');
+  
+  is(s.substr(0, 6).str(), string("abcdef"));
+  is(s.substr(0, 5).str(), string("abcde"));
+  is(s.substr(0, 4).str(), string("abcd"));
+  is(s.substr(0, 3).str(), string("abc"));
+  is(s.substr(0, 2).str(), string("ab"));
+  is(s.substr(0, 1).str(), string("a"));
+  is(s.substr(0, 0).str(), string(""));
+  is(s.substr(1, 5).str(), string("bcdef"));
+  is(s.substr(1, 4).str(), string("bcde"));
+  is(s.substr(1, 3).str(), string("bcd"));
+  is(s.substr(1, 2).str(), string("bc"));
+  is(s.substr(1, 1).str(), string("b"));
+  is(s.substr(1, 0).str(), string(""));
+  is(s.substr(2, 4).str(), string("cdef"));
+  is(s.substr(2, 3).str(), string("cde"));
+  is(s.substr(2, 2).str(), string("cd"));
+  is(s.substr(2, 1).str(), string("c"));
+  is(s.substr(2, 0).str(), string(""));
+  is(s.substr(3, 3).str(), string("def"));
+  is(s.substr(3, 2).str(), string("de"));
+  is(s.substr(3, 1).str(), string("d"));
+  is(s.substr(3, 0).str(), string(""));
+  is(s.substr(4, 2).str(), string("ef"));
+  is(s.substr(4, 1).str(), string("e"));
+  is(s.substr(4, 0).str(), string(""));
+  is(s.substr(5, 1).str(), string("f"));
+  is(s.substr(5, 0).str(), string(""));
+  is(s.substr(6, 0).str(), string(""));
+  
   return 0;
 }
 
