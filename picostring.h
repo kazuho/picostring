@@ -10,47 +10,47 @@ public:
   typedef typename StringT::size_type size_type;
 private:
   
-  class SimpleS;
+  class StringNode;
   
-  struct BaseS {
+  struct Node {
     const size_type size_;
     mutable size_t refcnt_;
-    BaseS(size_type size) : size_(size), refcnt_(0) {}
-    virtual ~BaseS() {}
-    const BaseS* retain() const { refcnt_++; return this; }
+    Node(size_type size) : size_(size), refcnt_(0) {}
+    virtual ~Node() {}
+    const Node* retain() const { refcnt_++; return this; }
     void release() const {
-      if (refcnt_-- == 0) delete const_cast<BaseS*>(this);
+      if (refcnt_-- == 0) delete const_cast<Node*>(this);
     }
     size_type size() const { return size_; }
     virtual char_type at(size_type pos) const = 0;
-    virtual const BaseS* substr(size_type pos, size_type length) const = 0;
-    virtual const BaseS* append(const BaseS* s) const = 0;
-    virtual const BaseS* append(const StringT& s) const = 0;
-    virtual const SimpleS* flatten() const = 0;
+    virtual const Node* substr(size_type pos, size_type length) const = 0;
+    virtual const Node* append(const Node* s) const = 0;
+    virtual const Node* append(const StringT& s) const = 0;
+    virtual const StringNode* flatten() const = 0;
     virtual char_type* flatten(char_type* out) const = 0;
   };
   
-  struct SimpleS : public BaseS {
+  struct StringNode : public Node {
     const StringT s_;
     const size_type offset_;
-    SimpleS(const StringT& s, size_type offset, size_type length)
-      : BaseS(length), s_(s), offset_(offset) {}
+    StringNode(const StringT& s, size_type offset, size_type length)
+      : Node(length), s_(s), offset_(offset) {}
     virtual char_type at(size_type pos) const {
       return s_[offset_ + pos];
     }
-    virtual const BaseS* substr(size_type pos, size_type length) const {
-      return new SimpleS(s_, offset_ + pos, length);
+    virtual const Node* substr(size_type pos, size_type length) const {
+      return new StringNode(s_, offset_ + pos, length);
     }
-    virtual const BaseS* append(const BaseS* s) const {
-      return new LinkS(this->retain(), s->retain());
+    virtual const Node* append(const Node* s) const {
+      return new LinkNode(this->retain(), s->retain());
     }
-    virtual const BaseS* append(const StringT& s) const {
-      return new LinkS(this->retain(), new SimpleS(s, 0, s.size()));
+    virtual const Node* append(const StringT& s) const {
+      return new LinkNode(this->retain(), new StringNode(s, 0, s.size()));
     }
-    virtual const SimpleS* flatten() const {
+    virtual const StringNode* flatten() const {
       if (offset_ == 0 && s_.size() == this->size())
 	return this;
-      return new SimpleS(s_.substr(offset_, this->size()), 0, this->size());
+      return new StringNode(s_.substr(offset_, this->size()), 0, this->size());
     }
     virtual char_type* flatten(char_type* out) const {
       std::copy(s_.begin() + offset_, s_.begin() + offset_ + this->size(), out);
@@ -58,13 +58,13 @@ private:
     }
   };
   
-  struct LinkS : public BaseS {
-    const BaseS* left_;
-    const BaseS* right_;
+  struct LinkNode : public Node {
+    const Node* left_;
+    const Node* right_;
   public:
-    LinkS(const BaseS* left, const BaseS* right)
-      : BaseS(left->size() + right->size()), left_(left), right_(right) {}
-    ~LinkS() {
+    LinkNode(const Node* left, const Node* right)
+      : Node(left->size() + right->size()), left_(left), right_(right) {}
+    ~LinkNode() {
       left_->release();
       right_->release();
     }
@@ -72,28 +72,28 @@ private:
       return pos < left_->size()
 	? left_->at(pos) : right_->at(pos - left_->size());
     }
-    virtual const BaseS* substr(size_type pos, size_type length) const {
+    virtual const Node* substr(size_type pos, size_type length) const {
       if (pos < left_->size()) {
 	if (pos + length <= left_->size()) {
 	  return left_->substr(pos, length);
 	} else {
-	  return new LinkS(left_->substr(pos, left_->size() - pos),
-			   right_->substr(0, pos + length - left_->size()));
+	  return new LinkNode(left_->substr(pos, left_->size() - pos),
+			      right_->substr(0, pos + length - left_->size()));
 	}
       } else {
 	return right_->substr(pos - left_->size(), length);
       }
     }
-    virtual const BaseS* append(const BaseS* s) const {
-      return new LinkS(this->retain(), s->retain());
+    virtual const Node* append(const Node* s) const {
+      return new LinkNode(this->retain(), s->retain());
     }
-    virtual const BaseS* append(const StringT& s) const {
-      return new LinkS(this->retain(), new SimpleS(s, 0, s.size()));
+    virtual const Node* append(const StringT& s) const {
+      return new LinkNode(this->retain(), new StringNode(s, 0, s.size()));
     }
-    virtual const SimpleS* flatten() const {
+    virtual const StringNode* flatten() const {
       StringT s(this->size(), char_type());
       flatten(&s[0]);
-      return new SimpleS(s, 0, this->size());
+      return new StringNode(s, 0, this->size());
     }
     virtual char_type* flatten(char_type* out) const {
       out = left_->flatten(out);
@@ -102,14 +102,14 @@ private:
     }
   };
   
-  const BaseS* s_;
+  const Node* s_;
   
-  explicit picostring(const BaseS* s) : s_(s) {}
+  explicit picostring(const Node* s) : s_(s) {}
 public:
   picostring() : s_(NULL) {}
   picostring(const picostring& s) : s_(s.s_->retain()) {}
   picostring(const StringT& s) : s_(NULL) {
-    if (! s.empty()) s_ = new SimpleS(s, 0, s.size());
+    if (! s.empty()) s_ = new StringNode(s, 0, s.size());
   }
   picostring& operator=(const picostring& s) {
     if (this != &s) {
@@ -152,7 +152,7 @@ public:
     static StringT emptyStr;
     if (s_ == NULL)
       return emptyStr;
-    const SimpleS* flat = s_->flatten();
+    const StringNode* flat = s_->flatten();
     if (flat != s_) {
       s_->release();
       const_cast<picostring*>(this)->s_ = flat;
