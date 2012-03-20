@@ -108,7 +108,7 @@ private:
 public:
   picostring() : s_(NULL) {}
   picostring(const picostring& s) : s_(s.s_->retain()) {}
-  picostring(const StringT& s) : s_(NULL) {
+  explicit picostring(const StringT& s) : s_(NULL) {
     if (! s.empty()) s_ = new StringNode(s, 0, s.size());
   }
   picostring& operator=(const picostring& s) {
