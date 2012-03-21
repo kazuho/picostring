@@ -95,11 +95,18 @@ private:
     virtual const StringNode* flatten() const {
       if (offset_ == 0 && s_.size() == this->size())
 	return this;
-      return new StringNode(s_.substr(offset_, this->size()), 0, this->size());
+      StringNode* newNode = new StringNode(s_.substr(offset_, this->size()),
+					   0, this->size());
+      if (this->release())
+	delete this;
+      return newNode;
     }
     virtual char_type* flatten(char_type* out, std::vector<const Node*>&) const {
       std::copy(s_.begin() + offset_, s_.begin() + offset_ + this->size(), out);
-      return out + this->size();
+      out += this->size();
+      if (this->release())
+	delete this;
+      return out;
     }
   };
   
@@ -154,6 +161,12 @@ private:
     virtual char_type* flatten(char_type* out, std::vector<const Node*>& delayed) const {
       delayed.push_back(right_);
       delayed.push_back(left_);
+      if (this->release())
+	delete this;
+      else {
+	right_->retain();
+	left_->retain();
+      }
       return out;
     }
   };
@@ -243,11 +256,7 @@ private:
   const StringNode* _flatten() const {
     assert(s_ != NULL);
     const StringNode* flat = s_->flatten();
-    if (flat != s_) {
-      if (s_->release())
-	s_->destroy();
-      const_cast<picostring*>(this)->s_ = flat;
-    }
+    const_cast<picostring*>(this)->s_ = flat;
     return flat;
   }
 };
