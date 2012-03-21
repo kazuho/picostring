@@ -52,9 +52,7 @@ private:
   public:
     Node(size_type size) : size_(size), refcnt_(0) {}
     const Node* retain() const { refcnt_++; return this; }
-    void release() const {
-      if (refcnt_-- == 0) destroy();
-    }
+    bool release() const { return refcnt_-- == 0; }
     size_type size() const { return size_; }
     virtual void destroy() const = 0;
     virtual const Node* nodeAt(size_type& pos) const = 0;
@@ -63,7 +61,7 @@ private:
     virtual const StringNode* flatten() const = 0;
     virtual char_type* flatten(char_type* out, std::vector<const Node*>& delayed) const = 0;
     static bool _releaseMayDefer(const Node* node) {
-      if (node->refcnt_-- == 0) {
+      if (node->release()) {
 	if (typeid(*node) == typeid(LinkNode))
 	  return true;
 	node->destroy();
@@ -174,13 +172,15 @@ public:
   }
   picostring& operator=(const picostring& s) {
     if (this != &s) {
-      if (s_ != NULL) s_->release();
+      if (s_ != NULL && s_->release())
+	s_->destroy();
       s_ = s.s_ != NULL ? s.s_->retain() : NULL;
     }
     return *this;
   }
   ~picostring() {
-    if (s_ != NULL) s_->release();
+    if (s_ != NULL && s_->release())
+      s_->destroy();
   }
   bool empty() const { return s_ == NULL; }
   size_type size() const { return s_ != NULL ? s_->size() : 0; }
@@ -244,7 +244,8 @@ private:
     assert(s_ != NULL);
     const StringNode* flat = s_->flatten();
     if (flat != s_) {
-      s_->release();
+      if (s_->release())
+	s_->destroy();
       const_cast<picostring*>(this)->s_ = flat;
     }
     return flat;
