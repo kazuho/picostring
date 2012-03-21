@@ -31,6 +31,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <vector>
 
 template <typename StringT> class picostring {
 public:
@@ -38,7 +39,8 @@ public:
   typedef typename StringT::size_type size_type;
 private:
   
-  class StringNode;
+  struct Node;
+  struct StringNode;
   
   struct Node {
     const size_type size_;
@@ -46,8 +48,12 @@ private:
     Node(size_type size) : size_(size), refcnt_(0) {}
     virtual ~Node() {}
     const Node* retain() const { refcnt_++; return this; }
-    void release() const {
-      if (refcnt_-- == 0) delete const_cast<Node*>(this);
+    bool release() const {
+      if (refcnt_-- == 0) {
+	releaseDelayed_.push_back(this);
+	return true;
+      } else
+	return false;
     }
     size_type size() const { return size_; }
     virtual char_type at(size_type pos) const = 0;
@@ -56,6 +62,14 @@ private:
     virtual const Node* append(const StringT& s) const = 0;
     virtual const StringNode* flatten() const = 0;
     virtual char_type* flatten(char_type* out) const = 0;
+    static std::vector<const Node*> releaseDelayed_;
+    static void releaseDelayed() {
+      while (! releaseDelayed_.empty()) {
+	Node* node = const_cast<Node*>(releaseDelayed_.back());
+	releaseDelayed_.pop_back();
+	delete node;
+      }
+    }
   };
   
   struct StringNode : public Node {
@@ -141,13 +155,17 @@ public:
   }
   picostring& operator=(const picostring& s) {
     if (this != &s) {
-      if (s_ != NULL) s_->release();
+      if (s_ != NULL)
+	if (s_->release())
+	  Node::releaseDelayed();
       s_ = s.s_ != NULL ? s.s_->retain() : NULL;
     }
     return *this;
   }
   ~picostring() {
-    if (s_ != NULL) s_->release();
+    if (s_ != NULL)
+      if (s_->release())
+	Node::releaseDelayed();
   }
   bool empty() const { return s_ == NULL; }
   size_type size() const { return s_ != NULL ? s_->size() : 0; }
@@ -182,7 +200,8 @@ public:
       return emptyStr;
     const StringNode* flat = s_->flatten();
     if (flat != s_) {
-      s_->release();
+      if (s_->release())
+	Node::releaseDelayed();
       const_cast<picostring*>(this)->s_ = flat;
     }
     return flat->s_;
@@ -198,6 +217,8 @@ public:
   bool operator>(const picostring& x) const { return str() > x.str(); }
   bool operator>=(const picostring& x) const { return str() >= x.str(); }
 };
+
+template <typename StringT> std::vector<const typename picostring<StringT>::Node*> picostring<StringT>::Node::releaseDelayed_;
 
 #ifdef TEST_PICOSTRING
 
