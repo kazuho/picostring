@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <cassert>
 #include <vector>
+#include <typeinfo>
 
 template <typename StringT> class picostring {
 public:
@@ -39,62 +40,52 @@ public:
   typedef typename StringT::size_type size_type;
 private:
   
-  struct Node;
-  struct StringNode;
+  class Node;
+  class StringNode;
+  class LinkNode;
   
-  struct DeferredDestructor {
-    bool ready_;
-    std::vector<Node*> nodes_;
-    DeferredDestructor() : ready_(false) {}
-    bool setup() {
-      if (! ready_) {
-	ready_ = true;
-	return true;
-      } else
-	return false;
-    }
-    void destruct() {
-      while (! nodes_.empty()) {
-	Node* node = nodes_.back();
-	nodes_.pop_back();
-	delete node;
-      }
-      ready_ = false;
-    }
-    void set(const Node* node) {
-      nodes_.push_back(const_cast<Node*>(node));
-    }
-  };
-  static DeferredDestructor deferredDestructor_;
-  
-  struct Node {
+  class Node {
+  protected:
     const size_type size_;
     mutable size_t refcnt_;
+    ~Node() {}
+  public:
     Node(size_type size) : size_(size), refcnt_(0) {}
-    virtual ~Node() {}
     const Node* retain() const { refcnt_++; return this; }
     void release() const {
-      if (refcnt_-- == 0) delete this;
-    }
-    void releaseDeferred() const {
-      if (refcnt_-- == 0)
-	deferredDestructor_.set(this);
+      if (refcnt_-- == 0) destroy();
     }
     size_type size() const { return size_; }
+    virtual void destroy() const = 0;
     virtual const Node* nodeAt(size_type& pos) const = 0;
     virtual const Node* append(const Node* s) const = 0;
     virtual const Node* append(const StringT& s) const = 0;
     virtual const StringNode* flatten() const = 0;
     virtual char_type* flatten(char_type* out, std::vector<const Node*>& delayed) const = 0;
+    static bool _releaseMayDefer(const Node* node) {
+      if (node->refcnt_-- == 0) {
+	if (typeid(*node) == typeid(LinkNode))
+	  return true;
+	node->destroy();
+      }
+      return false;
+    }
   };
   
-  struct StringNode : public Node {
+  class StringNode : public Node {
+  private:
     const StringT s_;
     const size_type offset_;
+    ~StringNode() {}
+  public:
     StringNode(const StringT& s, size_type offset, size_type length)
       : Node(length), s_(s), offset_(offset) {}
     StringNode(const char_type* s, size_type length)
       : Node(length), s_(s, s + length), offset_(0) {}
+    const StringT& str() const { return s_; }
+    virtual void destroy() const {
+      delete const_cast<StringNode*>(this);
+    }
     virtual const Node* nodeAt(size_type&) const {
       return NULL;
     }
@@ -115,21 +106,28 @@ private:
     }
   };
   
-  struct LinkNode : public Node {
+  class LinkNode : public Node {
     const Node* left_;
     const Node* right_;
+    ~LinkNode() {}
   public:
     LinkNode(const Node* left, const Node* right)
       : Node(left->size() + right->size()), left_(left), right_(right) {}
-    ~LinkNode() {
-      if (deferredDestructor_.setup()) {
-	left_->releaseDeferred();
-	right_->releaseDeferred();
-	deferredDestructor_.destruct();
-      } else {
-	left_->releaseDeferred();
-	right_->releaseDeferred();
-      }
+    virtual void destroy() const {
+      std::vector<const LinkNode*> deferred;
+      deferred.push_back(this);
+      do {
+	const LinkNode* node = deferred.back();
+	if (Node::_releaseMayDefer(node->left_)) {
+	  deferred.back() = static_cast<const LinkNode*>(node->left_);
+	  if (Node::_releaseMayDefer(node->right_))
+	    deferred.push_back(static_cast<const LinkNode*>(node->right_));
+	} else if (Node::_releaseMayDefer(node->right_))
+	  deferred.back() = static_cast<const LinkNode*>(node->right_);
+	else
+	  deferred.pop_back();
+	delete const_cast<LinkNode*>(node);
+      } while (! deferred.empty());
     }
     virtual const Node* nodeAt(size_type& pos) const {
       if (pos < left_->size()) {
@@ -193,14 +191,14 @@ public:
     const Node* node = s_;
     while (const Node* n = node->nodeAt(pos))
       node = n;
-    return static_cast<const StringNode*>(node)->s_[pos];
+    return static_cast<const StringNode*>(node)->str()[pos];
   }
   picostring substr(size_type pos, size_type length) const {
     assert(pos + length <= s_->size());
     if (length == 0)
       return picostring();
     assert(s_ != NULL);
-    return picostring(new StringNode(_flatten()->s_, pos, length));
+    return picostring(new StringNode(_flatten()->str(), pos, length));
   }
   picostring append(const picostring& s) const {
     if (s_ == NULL)
@@ -230,7 +228,7 @@ public:
       static StringT emptyStr;
       return emptyStr;
     }
-    return _flatten()->s_;
+    return _flatten()->str();
   }
   bool operator==(const picostring& x) const {
     if (size() != x.size())
@@ -253,8 +251,6 @@ private:
     return flat;
   }
 };
-
-template <typename StringT> typename picostring<StringT>::DeferredDestructor picostring<StringT>::deferredDestructor_;
 
 #ifdef TEST_PICOSTRING
 
