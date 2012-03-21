@@ -87,6 +87,8 @@ private:
     const size_type offset_;
     StringNode(const StringT& s, size_type offset, size_type length)
       : Node(length), s_(s), offset_(offset) {}
+    StringNode(const char_type* s, size_type length)
+      : Node(length), s_(s, s + length), offset_(0) {}
     virtual const Node* nodeAt(size_type&) const {
       return NULL;
     }
@@ -164,6 +166,9 @@ public:
   explicit picostring(const StringT& s) : s_(NULL) {
     if (! s.empty()) s_ = new StringNode(s, 0, s.size());
   }
+  picostring(const char_type* s, size_type length) : s_(NULL) {
+    if (length != 0) s_ = new StringNode(s, length);
+  }
   picostring& operator=(const picostring& s) {
     if (this != &s) {
       if (s_ != NULL) s_->release();
@@ -203,6 +208,14 @@ public:
       return picostring(s);
     else
       return picostring(s_->append(s));
+  }
+  picostring append(const char_type* s, size_type length) const {
+    if (length == 0)
+      return *this;
+    else if (s_ == NULL)
+      return picostring(s, length);
+    else
+      return picostirng(s->append(s, length));
   }
   const StringT& str() const {
     if (s_ == NULL) {
@@ -270,7 +283,7 @@ typedef picostring<string> picostr;
 
 int main(int, char**)
 {
-  plan(51);
+  plan(53);
   
   is(picostr().str(), string());
   ok(picostr().empty());
@@ -329,6 +342,9 @@ int main(int, char**)
   ok(picostr("ab") <= picostr("ab").append("c"));
   ok(picostr("ac") > picostr("ab").append("c"));
   ok(picostr("ac") >= picostr("ab").append("c"));
+  
+  is(picostr("a"), picostr("ab", 1));
+  is(picostr("ab"), picostr("ab", 1).append("b"));
   
   return 0;
 }
