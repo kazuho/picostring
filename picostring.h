@@ -60,7 +60,7 @@ private:
     virtual const Node* append(const Node* s) const = 0;
     virtual const Node* append(const StringT& s) const = 0;
     virtual const StringNode* flatten() const = 0;
-    virtual char_type* flatten(char_type* out) const = 0;
+    virtual char_type* flatten(char_type* out, std::vector<const Node*>& delayed) const = 0;
     
     static std::vector<const Node*>* releaseDelayed_;
     static bool setupReleaseDelayed() {
@@ -103,7 +103,7 @@ private:
 	return this;
       return new StringNode(s_.substr(offset_, this->size()), 0, this->size());
     }
-    virtual char_type* flatten(char_type* out) const {
+    virtual char_type* flatten(char_type* out, std::vector<const Node*>&) const {
       std::copy(s_.begin() + offset_, s_.begin() + offset_ + this->size(), out);
       return out + this->size();
     }
@@ -149,12 +149,18 @@ private:
     }
     virtual const StringNode* flatten() const {
       StringT s(this->size(), char_type());
-      flatten(&s[0]);
+      std::vector<const Node*> pending;
+      char_type* dst = flatten(&s[0], pending);
+      do {
+	const Node* top = pending.back();
+	pending.pop_back();
+	dst = top->flatten(dst, pending);
+      } while (! pending.empty());
       return new StringNode(s, 0, this->size());
     }
-    virtual char_type* flatten(char_type* out) const {
-      out = left_->flatten(out);
-      out = right_->flatten(out);
+    virtual char_type* flatten(char_type* out, std::vector<const Node*>& delayed) const {
+      delayed.push_back(right_);
+      delayed.push_back(left_);
       return out;
     }
   };
