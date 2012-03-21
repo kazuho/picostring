@@ -159,6 +159,16 @@ public:
     }
     return flat->s_;
   }
+  bool operator==(const picostring& x) const {
+    if (size() != x.size())
+      return false;
+    return str() == x.str();
+  }
+  bool operator!=(const picostring& x) const { return ! (*this == x); }
+  bool operator<(const picostring& x) const { return str() < x.str(); }
+  bool operator<=(const picostring& x) const { return str() <= x.str(); }
+  bool operator>(const picostring& x) const { return str() > x.str(); }
+  bool operator>=(const picostring& x) const { return str() >= x.str(); }
 };
 
 #ifdef TEST_PICOSTRING
@@ -196,7 +206,7 @@ typedef picostring<string> picostr;
 
 int main(int, char**)
 {
-  plan(45);
+  plan(51);
   
   is(picostr().str(), string());
   ok(picostr().empty());
@@ -248,6 +258,13 @@ int main(int, char**)
   is(s.substr(5, 1).str(), string("f"));
   is(s.substr(5, 0).str(), string(""));
   is(s.substr(6, 0).str(), string(""));
+  
+  ok(picostr("abc") == picostr("ab").append("c"));
+  ok(picostr("abc") != picostr("ab"));
+  ok(picostr("ab") < picostr("ab").append("c"));
+  ok(picostr("ab") <= picostr("ab").append("c"));
+  ok(picostr("ac") > picostr("ab").append("c"));
+  ok(picostr("ac") >= picostr("ab").append("c"));
   
   return 0;
 }
