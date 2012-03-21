@@ -56,7 +56,6 @@ private:
     }
     size_type size() const { return size_; }
     virtual char_type at(size_type pos) const = 0;
-    virtual const Node* substr(size_type pos, size_type length) const = 0;
     virtual const Node* append(const Node* s) const = 0;
     virtual const Node* append(const StringT& s) const = 0;
     virtual const StringNode* flatten() const = 0;
@@ -88,9 +87,6 @@ private:
       : Node(length), s_(s), offset_(offset) {}
     virtual char_type at(size_type pos) const {
       return s_[offset_ + pos];
-    }
-    virtual const Node* substr(size_type pos, size_type length) const {
-      return new StringNode(s_, offset_ + pos, length);
     }
     virtual const Node* append(const Node* s) const {
       return new LinkNode(this->retain(), s->retain());
@@ -128,18 +124,6 @@ private:
     virtual char_type at(size_type pos) const {
       return pos < left_->size()
 	? left_->at(pos) : right_->at(pos - left_->size());
-    }
-    virtual const Node* substr(size_type pos, size_type length) const {
-      if (pos < left_->size()) {
-	if (pos + length <= left_->size()) {
-	  return left_->substr(pos, length);
-	} else {
-	  return new LinkNode(left_->substr(pos, left_->size() - pos),
-			      right_->substr(0, pos + length - left_->size()));
-	}
-      } else {
-	return right_->substr(pos - left_->size(), length);
-      }
     }
     virtual const Node* append(const Node* s) const {
       return new LinkNode(this->retain(), s->retain());
@@ -196,7 +180,7 @@ public:
     if (length == 0)
       return picostring();
     assert(s_ != NULL);
-    return picostring(s_->substr(pos, length));
+    return picostring(new StringNode(_flatten()->s_, pos, length));
   }
   picostring append(const picostring& s) const {
     if (s_ == NULL)
@@ -212,15 +196,11 @@ public:
       return picostring(s_->append(s));
   }
   const StringT& str() const {
-    static StringT emptyStr;
-    if (s_ == NULL)
+    if (s_ == NULL) {
+      static StringT emptyStr;
       return emptyStr;
-    const StringNode* flat = s_->flatten();
-    if (flat != s_) {
-      s_->release();
-      const_cast<picostring*>(this)->s_ = flat;
     }
-    return flat->s_;
+    return _flatten()->s_;
   }
   bool operator==(const picostring& x) const {
     if (size() != x.size())
@@ -232,6 +212,16 @@ public:
   bool operator<=(const picostring& x) const { return str() <= x.str(); }
   bool operator>(const picostring& x) const { return str() > x.str(); }
   bool operator>=(const picostring& x) const { return str() >= x.str(); }
+private:
+  const StringNode* _flatten() const {
+    assert(s_ != NULL);
+    const StringNode* flat = s_->flatten();
+    if (flat != s_) {
+      s_->release();
+      const_cast<picostring*>(this)->s_ = flat;
+    }
+    return flat;
+  }
 };
 
 template <typename StringT> std::vector<const typename picostring<StringT>::Node*>* picostring<StringT>::Node::releaseDelayed_;
