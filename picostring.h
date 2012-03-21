@@ -45,9 +45,9 @@ private:
   class LinkNode;
   
   class Node {
-  protected:
     const size_type size_;
     mutable size_t refcnt_;
+  protected:
     ~Node() {}
   public:
     Node(size_type size) : size_(size), refcnt_(0) {}
@@ -73,7 +73,6 @@ private:
   };
   
   class StringNode : public Node {
-  private:
     const StringT s_;
     const size_type offset_;
     ~StringNode() {}
