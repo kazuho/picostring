@@ -46,7 +46,13 @@ private:
     bool ready_;
     std::vector<Node*> nodes_;
     DeferredDestructor() : ready_(false) {}
-    bool setup() { if (! ready_) {ready_ = true; return true; } return false; }
+    bool setup() {
+      if (! ready_) {
+	ready_ = true;
+	return true;
+      } else
+	return false;
+    }
     void destruct() {
       while (! nodes_.empty()) {
 	Node* node = nodes_.back();
@@ -117,12 +123,12 @@ private:
       : Node(left->size() + right->size()), left_(left), right_(right) {}
     ~LinkNode() {
       if (deferredDestructor_.setup()) {
-	left_->release();
-	right_->release();
+	left_->releaseDeferred();
+	right_->releaseDeferred();
 	deferredDestructor_.destruct();
       } else {
-	left_->release();
-	right_->release();
+	left_->releaseDeferred();
+	right_->releaseDeferred();
       }
     }
     virtual const Node* nodeAt(size_type& pos) const {
@@ -199,7 +205,9 @@ public:
   picostring append(const picostring& s) const {
     if (s_ == NULL)
       return s;
-    return picostring(s_->append(s));
+    if (s.s_ == NULL)
+      return *this;
+    return picostring(s_->append(s.s_));
   }
   picostring append(const StringT& s) const {
     if (s.empty())
