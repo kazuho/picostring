@@ -39,7 +39,27 @@ public:
   typedef typename StringT::size_type size_type;
 private:
   
+  struct Node;
   struct StringNode;
+  
+  struct DeferredDestructor {
+    bool ready_;
+    std::vector<Node*> nodes_;
+    DeferredDestructor() : ready_(false) {}
+    bool setup() { if (! ready_) {ready_ = true; return true; } return false; }
+    void destruct() {
+      while (! nodes_.empty()) {
+	Node* node = nodes_.back();
+	nodes_.pop_back();
+	delete node;
+      }
+      ready_ = false;
+    }
+    void set(const Node* node) {
+      nodes_.push_back(const_cast<Node*>(node));
+    }
+  };
+  static DeferredDestructor deferredDestructor_;
   
   struct Node {
     const size_type size_;
@@ -50,9 +70,9 @@ private:
     void release() const {
       if (refcnt_-- == 0) delete this;
     }
-    void releaseDelayed() const {
+    void releaseDeferred() const {
       if (refcnt_-- == 0)
-	releaseDelayed_->push_back(this);
+	deferredDestructor_.set(this);
     }
     size_type size() const { return size_; }
     virtual const Node* nodeAt(size_type& pos) const = 0;
@@ -60,24 +80,6 @@ private:
     virtual const Node* append(const StringT& s) const = 0;
     virtual const StringNode* flatten() const = 0;
     virtual char_type* flatten(char_type* out, std::vector<const Node*>& delayed) const = 0;
-    
-    static std::vector<const Node*>* releaseDelayed_;
-    static bool setupReleaseDelayed() {
-      if (releaseDelayed_ == NULL) {
-	releaseDelayed_ = new std::vector<const Node*>();
-	return true;
-      } else
-	return false;
-    }
-    static void doReleaseDelayed() {
-      while (! releaseDelayed_->empty()) {
-	Node* node = const_cast<Node*>(releaseDelayed_->back());
-	releaseDelayed_->pop_back();
-	delete node;
-      }
-      delete releaseDelayed_;
-      releaseDelayed_ = NULL;
-    }
   };
   
   struct StringNode : public Node {
@@ -112,10 +114,10 @@ private:
     LinkNode(const Node* left, const Node* right)
       : Node(left->size() + right->size()), left_(left), right_(right) {}
     ~LinkNode() {
-      if (Node::setupReleaseDelayed()) {
+      if (deferredDestructor_.setup()) {
 	left_->release();
 	right_->release();
-	Node::doReleaseDelayed();
+	deferredDestructor_.destruct();
       } else {
 	left_->release();
 	right_->release();
@@ -231,7 +233,7 @@ private:
   }
 };
 
-template <typename StringT> std::vector<const typename picostring<StringT>::Node*>* picostring<StringT>::Node::releaseDelayed_;
+template <typename StringT> typename picostring<StringT>::DeferredDestructor picostring<StringT>::deferredDestructor_;
 
 #ifdef TEST_PICOSTRING
 
