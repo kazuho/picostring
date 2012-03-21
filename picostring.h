@@ -39,7 +39,6 @@ public:
   typedef typename StringT::size_type size_type;
 private:
   
-  struct Node;
   struct StringNode;
   
   struct Node {
@@ -48,12 +47,12 @@ private:
     Node(size_type size) : size_(size), refcnt_(0) {}
     virtual ~Node() {}
     const Node* retain() const { refcnt_++; return this; }
-    bool release() const {
-      if (refcnt_-- == 0) {
-	releaseDelayed_.push_back(this);
-	return true;
-      } else
-	return false;
+    void release() const {
+      if (refcnt_-- == 0) delete this;
+    }
+    void releaseDelayed() const {
+      if (refcnt_-- == 0)
+	releaseDelayed_->push_back(this);
     }
     size_type size() const { return size_; }
     virtual char_type at(size_type pos) const = 0;
@@ -62,13 +61,23 @@ private:
     virtual const Node* append(const StringT& s) const = 0;
     virtual const StringNode* flatten() const = 0;
     virtual char_type* flatten(char_type* out) const = 0;
-    static std::vector<const Node*> releaseDelayed_;
-    static void releaseDelayed() {
-      while (! releaseDelayed_.empty()) {
-	Node* node = const_cast<Node*>(releaseDelayed_.back());
-	releaseDelayed_.pop_back();
+    
+    static std::vector<const Node*>* releaseDelayed_;
+    static bool setupReleaseDelayed() {
+      if (releaseDelayed_ == NULL) {
+	releaseDelayed_ = new std::vector<const Node*>();
+	return true;
+      } else
+	return false;
+    }
+    static void doReleaseDelayed() {
+      while (! releaseDelayed_->empty()) {
+	Node* node = const_cast<Node*>(releaseDelayed_->back());
+	releaseDelayed_->pop_back();
 	delete node;
       }
+      delete releaseDelayed_;
+      releaseDelayed_ = NULL;
     }
   };
   
@@ -107,8 +116,14 @@ private:
     LinkNode(const Node* left, const Node* right)
       : Node(left->size() + right->size()), left_(left), right_(right) {}
     ~LinkNode() {
-      left_->release();
-      right_->release();
+      if (Node::setupReleaseDelayed()) {
+	left_->release();
+	right_->release();
+	Node::doReleaseDelayed();
+      } else {
+	left_->release();
+	right_->release();
+      }
     }
     virtual char_type at(size_type pos) const {
       return pos < left_->size()
@@ -155,17 +170,13 @@ public:
   }
   picostring& operator=(const picostring& s) {
     if (this != &s) {
-      if (s_ != NULL)
-	if (s_->release())
-	  Node::releaseDelayed();
+      if (s_ != NULL) s_->release();
       s_ = s.s_ != NULL ? s.s_->retain() : NULL;
     }
     return *this;
   }
   ~picostring() {
-    if (s_ != NULL)
-      if (s_->release())
-	Node::releaseDelayed();
+    if (s_ != NULL) s_->release();
   }
   bool empty() const { return s_ == NULL; }
   size_type size() const { return s_ != NULL ? s_->size() : 0; }
@@ -200,8 +211,7 @@ public:
       return emptyStr;
     const StringNode* flat = s_->flatten();
     if (flat != s_) {
-      if (s_->release())
-	Node::releaseDelayed();
+      s_->release();
       const_cast<picostring*>(this)->s_ = flat;
     }
     return flat->s_;
@@ -218,7 +228,7 @@ public:
   bool operator>=(const picostring& x) const { return str() >= x.str(); }
 };
 
-template <typename StringT> std::vector<const typename picostring<StringT>::Node*> picostring<StringT>::Node::releaseDelayed_;
+template <typename StringT> std::vector<const typename picostring<StringT>::Node*>* picostring<StringT>::Node::releaseDelayed_;
 
 #ifdef TEST_PICOSTRING
 
