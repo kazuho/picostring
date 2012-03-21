@@ -55,7 +55,7 @@ private:
 	releaseDelayed_->push_back(this);
     }
     size_type size() const { return size_; }
-    virtual char_type at(size_type pos) const = 0;
+    virtual const Node* nodeAt(size_type& pos) const = 0;
     virtual const Node* append(const Node* s) const = 0;
     virtual const Node* append(const StringT& s) const = 0;
     virtual const StringNode* flatten() const = 0;
@@ -85,8 +85,8 @@ private:
     const size_type offset_;
     StringNode(const StringT& s, size_type offset, size_type length)
       : Node(length), s_(s), offset_(offset) {}
-    virtual char_type at(size_type pos) const {
-      return s_[offset_ + pos];
+    virtual const Node* nodeAt(size_type&) const {
+      return NULL;
     }
     virtual const Node* append(const Node* s) const {
       return new LinkNode(this->retain(), s->retain());
@@ -121,9 +121,13 @@ private:
 	right_->release();
       }
     }
-    virtual char_type at(size_type pos) const {
-      return pos < left_->size()
-	? left_->at(pos) : right_->at(pos - left_->size());
+    virtual const Node* nodeAt(size_type& pos) const {
+      if (pos < left_->size()) {
+	return left_;
+      } else {
+	pos -= left_->size();
+	return right_;
+      }
     }
     virtual const Node* append(const Node* s) const {
       return new LinkNode(this->retain(), s->retain());
@@ -173,7 +177,10 @@ public:
   char_type at(size_type pos) const {
     assert(s_ != NULL);
     assert(pos < s_->size());
-    return s_->at(pos);
+    const Node* node = s_;
+    while (const Node* n = node->nodeAt(pos))
+      node = n;
+    return static_cast<const StringNode*>(node)->s_[pos];
   }
   picostring substr(size_type pos, size_type length) const {
     assert(pos + length <= s_->size());
