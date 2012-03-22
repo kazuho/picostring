@@ -242,16 +242,60 @@ public:
     }
     return _flatten()->str();
   }
-  bool operator==(const picostring& x) const {
-    if (size() != x.size())
-      return false;
-    return str() == x.str();
+  friend bool operator==(const picostring& x, const picostring& y) {
+    return x.size() == y.size() && x.str() == y.str();
   }
-  bool operator!=(const picostring& x) const { return ! (*this == x); }
-  bool operator<(const picostring& x) const { return str() < x.str(); }
-  bool operator<=(const picostring& x) const { return str() <= x.str(); }
-  bool operator>(const picostring& x) const { return str() > x.str(); }
-  bool operator>=(const picostring& x) const { return str() >= x.str(); }
+  friend bool operator==(const picostring& x, const StringT& y) {
+    return x.size() == y.size() && x.str() == y;
+  }
+  friend bool operator==(const StringT& x, const picostring& y) {
+    return x.size() == y.size() && x == y.str();
+  }
+  friend bool operator!=(const picostring& x, const picostring& y) {
+    return ! (x == y);
+  }
+  friend bool operator!=(const picostring& x, const StringT& y) {
+    return ! (x == y);
+  }
+  friend bool operator!=(const StringT& x, const picostring& y) {
+    return ! (x == y);
+  }
+  friend bool operator<(const picostring& x, const picostring& y) {
+    return x.str() < y.str();
+  }
+  friend bool operator<(const picostring& x, const StringT& y) {
+    return x.str() < y;
+  }
+  friend bool operator<(const StringT& x, const picostring& y) {
+    return x() < y.str();
+  }
+  friend bool operator<=(const picostring& x, const picostring& y) {
+    return x.str() <= y.str();
+  }
+  friend bool operator<=(const picostring& x, const StringT& y) {
+    return x.str() <= y;
+  }
+  friend bool operator<=(const StringT& x, const picostring& y) {
+    return x() <= y.str();
+  }
+  friend bool operator>(const picostring& x, const picostring& y) {
+    return x.str() > y.str();
+  }
+  friend bool operator>(const picostring& x, const StringT& y) {
+    return x.str() > y;
+  }
+  friend bool operator>(const StringT& x, const picostring& y) {
+    return x() > y.str();
+  }
+  friend bool operator>=(const picostring& x, const picostring& y) {
+    return x.str() >= y.str();
+  }
+  friend bool operator>=(const picostring& x, const StringT& y) {
+    return x.str() >= y;
+  }
+  friend bool operator>=(const StringT& x, const picostring& y) {
+    return x() >= y.str();
+  }
 private:
   const StringNode* _flatten() const {
     assert(s_ != NULL);
