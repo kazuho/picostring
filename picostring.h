@@ -177,7 +177,7 @@ private:
 public:
   picostring() : s_(NULL) {}
   picostring(const picostring& s) : s_(s.s_->retain()) {}
-  explicit picostring(const StringT& s) : s_(NULL) {
+  picostring(const StringT& s) : s_(NULL) {
     if (! s.empty()) s_ = new StringNode(s, 0, s.size());
   }
   picostring(const char_type* s, size_type length) : s_(NULL) {
