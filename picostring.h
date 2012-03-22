@@ -191,6 +191,12 @@ public:
     }
     return *this;
   }
+  picostring& operator=(const StringT& s) {
+    if (s_ != NULL && s_->release())
+      s_->destroy();
+    s_ = new StringNode(s, 0, s.size());
+    return *this;
+  }
   ~picostring() {
     if (s_ != NULL && s_->release())
       s_->destroy();
@@ -340,7 +346,7 @@ typedef picostring<string> picostr;
 
 int main(int, char**)
 {
-  plan(53);
+  plan(54);
   
   is(picostr().str(), string());
   ok(picostr().empty());
@@ -402,6 +408,9 @@ int main(int, char**)
   
   is(picostr("a"), picostr("ab", 1));
   is(picostr("ab"), picostr("ab", 1).append("b"));
+  
+  s = "test";
+  is(s, picostr("test"));
   
   return 0;
 }
